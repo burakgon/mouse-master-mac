@@ -155,6 +155,25 @@ final class InputSynth {
         e.post(tap: .cghidEventTap)
     }
 
+    // MARK: Pinch
+
+    enum GesturePhase: Int64 {
+        case began = 1, changed = 2, ended = 4
+    }
+
+    /// A trackpad pinch: a gesture event of the zoom kind. `magnification` is the change of
+    /// scale since the last event (0.02 is 2 % bigger). Apps zoom smoothly around the pointer.
+    /// (Private event fields: 55 type, 110 gesture kind, 113 magnification, 132 phase.)
+    func pinch(_ magnification: Double, phase: GesturePhase) {
+        guard let e = CGEvent(source: source) else { return }
+        e.setIntegerValueField(CGEventField(rawValue: 55)!, value: 29)  // gesture
+        e.setIntegerValueField(CGEventField(rawValue: 110)!, value: 8)  // zoom (IOHID event type)
+        e.setIntegerValueField(CGEventField(rawValue: 132)!, value: phase.rawValue)
+        e.setDoubleValueField(CGEventField(rawValue: 113)!, value: magnification)
+        e.location = cursor
+        e.post(tap: .cghidEventTap)
+    }
+
     // MARK: Media keys
 
     enum MediaKey: Int32 {

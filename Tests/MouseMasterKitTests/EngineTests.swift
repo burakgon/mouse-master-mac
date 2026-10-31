@@ -63,10 +63,15 @@ final class GestureTests: XCTestCase {
         XCTAssertTrue(t.release().isEmpty)
     }
 
-    func testZoomSteps() {
+    func testZoomIsContinuous() {
         var t = tracker { $0.mode = .zoom }
-        XCTAssertEqual(t.motion(dx: 0, dy: mm(-19), dpi: 1000), [.zoom(1), .zoom(1)])
-        XCTAssertEqual(t.motion(dx: 0, dy: mm(10), dpi: 1000), [.zoom(-1)])
+        var level = 0.0
+        for _ in 0..<30 {
+            for o in t.motion(dx: 0, dy: mm(-1), dpi: 1000) { if case .magnify(let m) = o { level += m } }
+        }
+        XCTAssertEqual(exp(level), 2, accuracy: 0.02) // 30 mm up doubles the zoom
+        guard case .magnify(let out)? = t.motion(dx: 0, dy: mm(3), dpi: 1000).first else { return XCTFail() }
+        XCTAssertLessThan(out, 0)
     }
 }
 
@@ -87,6 +92,16 @@ final class ThumbwheelTests: XCTestCase {
                                   divertedResolution: 120, defaultDirection: -1, invert: false)
         XCTAssertEqual(t.event(ThumbInput(rotation: -25, status: .start, singleTap: false)), [.step(.right), .step(.right)])
         XCTAssertEqual(t.event(ThumbInput(rotation: -5, status: .active, singleTap: false)), [.step(.right)])
+    }
+
+    func testSmoothZoomAndItsEnd() {
+        var t = ThumbwheelTracker(binding: .zoom(speed: 1), divertedResolution: 120, defaultDirection: -1, invert: false)
+        var level = 0.0
+        for _ in 0..<12 {
+            for o in t.event(ThumbInput(rotation: -10, status: .active, singleTap: false)) { if case .magnify(let m) = o { level += m } }
+        }
+        XCTAssertEqual(exp(level), 3, accuracy: 0.01) // a full turn to the right zooms in 3×
+        XCTAssertEqual(t.event(ThumbInput(rotation: 0, status: .stop, singleTap: false)), [.magnifyEnd])
     }
 
     func testTap() {

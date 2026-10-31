@@ -138,6 +138,7 @@ final class DeviceController {
     private var wheelAccel: WheelAccelerator?
     private var thumbLit = false
     private lazy var scroller = SmoothScroller(synth: agent.synth)
+    private lazy var zoomer = PinchZoomer(synth: agent.synth)
 
     // Settings
     private var appliedSettings: DeviceSettings?
@@ -173,6 +174,7 @@ final class DeviceController {
         ready = false
         releaseAllHeld()
         scroller.stop()
+        zoomer.cancel()
         if var s = snapshot {
             s.online = false
             s.busy = false
@@ -718,6 +720,7 @@ final class DeviceController {
                 var tracker = g.tracker
                 gesture = nil
                 gestureOutputs(tracker.release(), key: key, set: tracker.set)
+                if tracker.set.mode == .zoom { zoomer.finish() }
             }
         } else {
             perform(agent.executor.release(action))
@@ -743,8 +746,8 @@ final class DeviceController {
                 perform(agent.executor.run(set.click))
             case .scroll(let dx, let dy):
                 scroller.direct(dx: dx, dy: dy)
-            case .zoom(let step):
-                perform(agent.executor.run(.builtin(step > 0 ? "zoom-in" : "zoom-out")))
+            case .magnify(let amount):
+                zoomer.add(amount)
             }
         }
     }
@@ -779,8 +782,11 @@ final class DeviceController {
                 if case .actions(let left, let right, _) = tracker.binding {
                     perform(agent.executor.run(d == .left ? left : right))
                 }
-            case .zoom(let step):
-                perform(agent.executor.run(.builtin(step > 0 ? "zoom-in" : "zoom-out")))
+            case .magnify(let amount):
+                // A turn to the right zooms in; the thumb wheel direction setting applies.
+                zoomer.add(amount)
+            case .magnifyEnd:
+                zoomer.finish()
             case .tap:
                 if let id {
                     agent.emitButton(device: id, control: "thumbwheel-tap", pressed: true)

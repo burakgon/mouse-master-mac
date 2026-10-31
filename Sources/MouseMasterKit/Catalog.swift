@@ -325,7 +325,9 @@ public enum ThumbwheelPresets {
     public static let all: [ThumbwheelPreset] = [
         .init(id: "scroll", title: "Smooth Horizontal Scroll", symbol: "arrow.left.and.right", binding: .scroll(speed: 1)),
         .init(id: "native", title: "macOS Horizontal Scroll", symbol: "arrow.left.arrow.right", binding: .native),
-        .init(id: "zoom", title: "Zoom", symbol: "plus.magnifyingglass", binding: .zoom(speed: 1)),
+        .init(id: "zoom", title: "Smooth Zoom", symbol: "plus.magnifyingglass", binding: .zoom(speed: 1)),
+        .init(id: "zoom-keys", title: "Zoom with ⌘+ and ⌘−", symbol: "plus.square.on.square",
+              binding: .actions(left: .builtin("zoom-out"), right: .builtin("zoom-in"), stepDegrees: 15)),
         .init(id: "volume", title: "Volume", symbol: "speaker.wave.2",
               binding: .actions(left: .builtin("volume-down"), right: .builtin("volume-up"), stepDegrees: 15)),
         .init(id: "brightness", title: "Brightness", symbol: "sun.max",

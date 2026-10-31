@@ -38,11 +38,12 @@ settings when the mouse wakes up. Mouse Master does the same job natively:
   Finder…), mouse buttons 4/5 elsewhere.
 - **Gestures** on every button that reports motion (on the MX Master: gesture, middle, back,
   forward, mode shift): up/down/left/right/click with presets, repeat while moving, a release
-  trigger, **pan** (move to scroll in any direction) and **zoom** modes.
+  trigger, **pan** (move to scroll in any direction) and smooth **zoom** modes.
 - **Smooth scrolling.** The wheel is read at full resolution (15 steps per notch on the
   MX Master 3S) and turned into continuous, trackpad-like scrolling with adjustable speed and
   acceleration. Scroll direction is set per mouse, independent from the trackpad.
-- **Thumb wheel:** smooth horizontal scrolling, zoom, volume, brightness, tabs, Spaces,
+- **Thumb wheel:** smooth horizontal scrolling, smooth zoom (a real trackpad pinch, around the
+  pointer), volume, brightness, tabs, Spaces,
   undo/redo, tracks or any two actions; tap action on touch-sensitive wheels.
 - **Pointer speed** (DPI) with presets and a cycle action, **precision mode** while a button is
   held, **SmartShift** and ratchet/free spin, MX Master 4 torque and haptics.

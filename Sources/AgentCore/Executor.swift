@@ -346,6 +346,100 @@ final class ActionExecutor {
     }
 }
 
+/// Smooth zoom: turns zoom amounts into a trackpad pinch, spread over display frames so the
+/// zoom glides. The pinch ends a moment after the last input.
+@MainActor
+final class PinchZoomer {
+    private let synth: InputSynth
+    private var pending = 0.0          // zoom still to apply, on a log scale
+    private var active = false
+    private var timer: DispatchSourceTimer?
+    private var lastTick: CFTimeInterval = 0
+    private var lastInput: CFTimeInterval = 0
+    private var endRequested = false
+    private var activity: NSObjectProtocol?
+    private static let interval = 1.0 / 120.0
+    private static let tau = 0.045
+    /// How long without input before the pinch is over.
+    private static let idleEnd = 0.25
+
+    init(synth: InputSynth) {
+        self.synth = synth
+    }
+
+    /// Positive zooms in; ln(2) doubles the zoom.
+    func add(_ logScale: Double) {
+        guard logScale.isFinite, logScale != 0 else { return }
+        pending += logScale
+        lastInput = CACurrentMediaTime()
+        endRequested = false
+        if !active {
+            active = true
+            synth.pinch(0, phase: .began)
+        }
+        if timer == nil {
+            start()
+            tick()
+        }
+    }
+
+    /// The input is over (wheel stopped, button released): end once the rest has played out.
+    func finish() {
+        guard active else { return }
+        endRequested = true
+    }
+
+    func cancel() {
+        pending = 0
+        if active { synth.pinch(0, phase: .ended) }
+        active = false
+        stopTimer()
+    }
+
+    private func start() {
+        lastTick = CACurrentMediaTime() - Self.interval
+        let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        t.schedule(deadline: .now() + Self.interval, repeating: Self.interval, leeway: .microseconds(500))
+        t.setEventHandler { [weak self] in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        timer = t
+        t.resume()
+        if activity == nil {
+            activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical],
+                                                             reason: "Smooth zoom")
+        }
+    }
+
+    private func stopTimer() {
+        timer?.cancel()
+        timer = nil
+        if let a = activity {
+            ProcessInfo.processInfo.endActivity(a)
+            activity = nil
+        }
+    }
+
+    private func tick() {
+        let now = CACurrentMediaTime()
+        let dt = min(now - lastTick, 0.05)
+        lastTick = now
+        if pending != 0 {
+            var step = pending * (1 - exp(-dt / Self.tau))
+            if abs(pending) < 0.0008 { step = pending }
+            pending -= step
+            synth.pinch(exp(step) - 1, phase: .changed)
+        }
+        let idle = now - lastInput
+        if pending == 0 && (endRequested || idle > Self.idleEnd) {
+            synth.pinch(0, phase: .ended)
+            active = false
+            endRequested = false
+            stopTimer()
+        }
+    }
+}
+
 /// Spreads scroll distance over display frames so wheel notches glide instead of jump.
 @MainActor
 final class SmoothScroller {

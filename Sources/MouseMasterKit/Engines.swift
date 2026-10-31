@@ -8,8 +8,8 @@ public enum GestureOutput: Equatable, Sendable {
     case click
     /// Pan mode: scroll by points (positive x reveals content to the right, positive y content below).
     case scroll(dx: Double, dy: Double)
-    /// Zoom mode: one zoom step (positive in, negative out).
-    case zoom(Int)
+    /// Zoom mode: change of the zoom level on a log scale (positive zooms in).
+    case magnify(Double)
 }
 
 /// Turns raw pointer motion reported while a gesture button is held into
@@ -20,8 +20,8 @@ public struct GestureTracker: Sendable {
     static let panPointsPerMM = 9.0
     /// Movement below this is still a click in pan and zoom mode.
     static let clickSlopMM = 2.0
-    /// Zoom mode: millimetres per zoom step at speed 1.
-    static let zoomMMPerStep = 9.0
+    /// Zoom mode: millimetres of movement that double the zoom at speed 1.
+    static let zoomMMPerDoubling = 30.0
 
     public let set: GestureSet
     private var accX = 0.0, accY = 0.0
@@ -29,7 +29,6 @@ public struct GestureTracker: Sendable {
     private var fired = false
     private var lockedVertical: Bool?
     private var skipNext: Bool
-    private var zoomAcc = 0.0
 
     /// `skipFirst`: ignore the first motion report, which some devices (MX Master 3S) fill with stale data.
     public init(set: GestureSet, skipFirst: Bool) {
@@ -54,14 +53,9 @@ public struct GestureTracker: Sendable {
             return [.scroll(dx: mx * k * sign, dy: my * k * sign)]
         case .zoom:
             // Moving the mouse away from you (negative y) zooms in.
-            zoomAcc += -my * min(max(set.zoomSpeed, 0.1), 10)
-            var out: [GestureOutput] = []
-            while abs(zoomAcc) >= Self.zoomMMPerStep {
-                let step = zoomAcc > 0 ? 1 : -1
-                out.append(.zoom(step))
-                zoomAcc -= Double(step) * Self.zoomMMPerStep
-            }
-            return out
+            guard my != 0 else { return [] }
+            let speed = min(max(set.zoomSpeed, 0.1), 10)
+            return [.magnify(-my / Self.zoomMMPerDoubling * speed * log(2))]
         case .directional:
             accX += mx
             accY += my
@@ -133,8 +127,10 @@ public enum ThumbOutput: Equatable, Sendable {
     case scroll(Double)
     /// One step of an action binding.
     case step(Direction)
-    /// One zoom step (positive in).
-    case zoom(Int)
+    /// Change of the zoom level on a log scale (positive zooms in).
+    case magnify(Double)
+    /// The wheel stopped turning: the pinch is over.
+    case magnifyEnd
     case tap
 }
 
@@ -155,8 +151,8 @@ public struct ThumbInput: Sendable {
 public struct ThumbwheelTracker: Sendable {
     /// Points per full turn at speed 1.
     static let pointsPerTurn = 520.0
-    /// Zoom steps per full turn at speed 1.
-    static let zoomStepsPerTurn = 8.0
+    /// Zoom factor of a full turn at speed 1 (on a log scale: one turn zooms 3×).
+    static let zoomPerTurn = log(3.0)
 
     public let binding: ThumbwheelBinding
     let divertedResolution: Double
@@ -175,6 +171,7 @@ public struct ThumbwheelTracker: Sendable {
         var out: [ThumbOutput] = []
         if e.singleTap { out.append(.tap) }
         if e.status == .start { acc = 0 }
+        if case .zoom = binding, e.status == .stop { out.append(.magnifyEnd) }
         guard e.rotation != 0 else { return out }
         // Positive means "to the right" after the device's default direction.
         let units = Double(e.rotation) * direction * (invert ? -1 : 1)
@@ -185,12 +182,7 @@ public struct ThumbwheelTracker: Sendable {
         case .scroll(let speed):
             out.append(.scroll(turns * Self.pointsPerTurn * min(max(speed, 0.1), 10)))
         case .zoom(let speed):
-            acc += turns * Self.zoomStepsPerTurn * min(max(speed, 0.1), 10)
-            while abs(acc) >= 1 {
-                let s = acc > 0 ? 1 : -1
-                out.append(.zoom(s))
-                acc -= Double(s)
-            }
+            out.append(.magnify(turns * Self.zoomPerTurn * min(max(speed, 0.1), 10)))
         case .actions(_, _, let stepDegrees):
             let step = max(min(max(stepDegrees, 3), 180) / 360, 1 / divertedResolution)
             acc += turns
