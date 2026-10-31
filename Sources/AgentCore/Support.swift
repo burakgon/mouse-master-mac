@@ -281,9 +281,9 @@ enum NaturalScrolling {
 }
 
 /// Hidden knobs for the feel of scrolling, read once at start:
-///   defaults write com.burakgon.MouseMaster.Agent ScrollSmoothing -float 0.065
-///   defaults write com.burakgon.MouseMaster.Agent ScrollPointsPerNotch -float 42
-///   defaults write com.burakgon.MouseMaster.Agent ThumbwheelPointsPerTurn -float 520
+///   defaults write com.burakgon.MouseMaster ScrollSmoothing -float 0.065
+///   defaults write com.burakgon.MouseMaster ScrollPointsPerNotch -float 42
+///   defaults write com.burakgon.MouseMaster ThumbwheelPointsPerTurn -float 520
 enum Tuning {
     private static func value(_ key: String, _ fallback: Double, _ range: ClosedRange<Double>) -> Double {
         guard let v = UserDefaults.standard.object(forKey: key) as? Double else { return fallback }

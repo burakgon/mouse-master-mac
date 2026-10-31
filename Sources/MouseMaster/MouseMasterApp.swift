@@ -46,10 +46,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The bundle is a UI element so the agent instance stays out of the Dock; the
         // settings window is a regular app with a Dock icon and a menu bar.
         NSApp.setActivationPolicy(.regular)
+        // --pretend-active: draw windows as if they were in front (screenshots taken while
+        // another app is in use).
+        if args.contains("--pretend-active") { ScreenshotMode.drawWindowsAsActive() }
+        // --appearance light|dark (screenshots, or to override the system setting).
+        if let i = args.firstIndex(of: "--appearance"), i + 1 < args.count {
+            NSApp.appearance = NSAppearance(named: args[i + 1] == "light" ? .aqua : .darkAqua)
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.activate()
+        let args = CommandLine.arguments
+        // --window-size 1320x840 (screenshots).
+        if let i = args.firstIndex(of: "--window-size"), i + 1 < args.count {
+            let size = args[i + 1].split(separator: "x").compactMap { Double($0) }
+            if size.count == 2 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    for w in NSApp.windows where w.isVisible && w.frame.width > 400 {
+                        w.setContentSize(NSSize(width: size[0], height: size[1]))
+                    }
+                }
+            }
+        }
+        if !args.contains("--background") { NSApp.activate() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -76,4 +95,29 @@ enum KeyboardLayout {
             return s.isEmpty ? nil : s
         }
     }
+}
+
+enum ScreenshotMode {
+    static func drawWindowsAsActive() {
+        for (original, replacement) in [(#selector(getter: NSWindow.isKeyWindow), #selector(getter: NSWindow.mm_alwaysKey)),
+                                        (#selector(getter: NSWindow.isMainWindow), #selector(getter: NSWindow.mm_alwaysMain))] {
+            if let a = class_getInstanceMethod(NSWindow.self, original),
+               let b = class_getInstanceMethod(NSWindow.self, replacement) {
+                method_exchangeImplementations(a, b)
+            }
+        }
+        if let a = class_getInstanceMethod(NSApplication.self, #selector(getter: NSApplication.isActive)),
+           let b = class_getInstanceMethod(NSApplication.self, #selector(getter: NSApplication.mm_alwaysActive)) {
+            method_exchangeImplementations(a, b)
+        }
+    }
+}
+
+extension NSApplication {
+    @objc var mm_alwaysActive: Bool { true }
+}
+
+extension NSWindow {
+    @objc var mm_alwaysKey: Bool { true }
+    @objc var mm_alwaysMain: Bool { true }
 }

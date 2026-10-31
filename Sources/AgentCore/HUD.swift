@@ -82,6 +82,8 @@ final class HUD {
         p.isReleasedWhenClosed = false
 
         let content: NSView
+        #if compiler(>=6.2)
+        // Liquid Glass on macOS 26 and later (needs the macOS 26 SDK to build).
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             glass.cornerRadius = height / 2
@@ -89,7 +91,13 @@ final class HUD {
             glass.contentView = inner
             content = glass
             setUp(container: inner)
-        } else {
+            content.autoresizingMask = [.width, .height]
+            p.contentView = content
+            panel = p
+            return p
+        }
+        #endif
+        do {
             let v = NSVisualEffectView()
             v.material = .hudWindow
             v.blendingMode = .behindWindow
