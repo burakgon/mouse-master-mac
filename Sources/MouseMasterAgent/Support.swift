@@ -124,8 +124,13 @@ final class PermissionWatcher {
     private(set) var accessibility = AXIsProcessTrusted()
     var inputMonitoringNeeded = false
     var onChange: (() -> Void)?
+    /// Tries the devices macOS refused to open again; true while some still cannot be opened.
+    var retryDeniedDevices: (() -> Bool)?
+    /// The permission is there, but this process still cannot use it.
+    var onNeedsRelaunch: (() -> Void)?
     private var timer: Timer?
     private var prompted = false
+    private var grantedSince: Date?
 
     var inputMonitoring: Bool { IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted }
 
@@ -155,7 +160,7 @@ final class PermissionWatcher {
     private func startPolling() {
         guard timer == nil else { return }
         // Cheap and only while something is missing.
-        timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
     }
@@ -168,9 +173,20 @@ final class PermissionWatcher {
             changed = true
             Log.info("accessibility permission \(ax ? "granted" : "revoked")")
         }
-        if inputMonitoringNeeded && inputMonitoring {
-            inputMonitoringNeeded = false
-            changed = true
+        if inputMonitoringNeeded {
+            if retryDeniedDevices?() == false {
+                inputMonitoringNeeded = false
+                grantedSince = nil
+                changed = true
+                Log.info("Input Monitoring allowed; devices opened")
+            } else if inputMonitoring {
+                // Allowed, yet still refused: some macOS versions only honour it in a new process.
+                if let since = grantedSince {
+                    if Date().timeIntervalSince(since) > 3 { onNeedsRelaunch?() }
+                } else {
+                    grantedSince = Date()
+                }
+            }
         }
         if accessibility && !inputMonitoringNeeded {
             timer?.invalidate()

@@ -42,15 +42,13 @@ final class Agent {
         executor.frontmostBundleID = { [weak self] in self?.apps.current?.bundleID }
         executor.openSettings = { Agent.openSettingsApp() }
 
+        permissions.retryDeniedDevices = { [weak self] in self?.devices.retryDenied() ?? false }
+        permissions.onNeedsRelaunch = { [weak self] in
+            Log.info("Input Monitoring was allowed; restarting to open the devices")
+            self?.relaunch()
+        }
         permissions.onChange = { [weak self] in
-            guard let self else { return }
-            if self.devices.retryDenied() && self.permissions.inputMonitoring {
-                // Some macOS versions only honour a new Input Monitoring grant in a new process.
-                Log.info("Input Monitoring was allowed; restarting to open the devices")
-                self.relaunch()
-                return
-            }
-            self.environmentChanged()
+            self?.environmentChanged()
         }
         permissions.start()
 

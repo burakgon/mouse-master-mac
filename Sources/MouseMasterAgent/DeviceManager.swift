@@ -97,6 +97,7 @@ final class DeviceManager {
     private var manager: IOHIDManager?
     private var nodes: [ObjectIdentifier: Node] = [:]
     private var denied: [IOHIDDevice] = []
+    private var deniedLogged: Set<ObjectIdentifier> = []
 
     init(agent: Agent) {
         self.agent = agent
@@ -144,7 +145,9 @@ final class DeviceManager {
         let transport = HIDTransport(device: device)
         let result = transport.open()
         guard result == kIOReturnSuccess else {
-            Log.error(String(format: "cannot open %@: 0x%08x", info.product, UInt32(bitPattern: result)))
+            if deniedLogged.insert(key).inserted {
+                Log.error(String(format: "cannot open %@: 0x%08x", info.product, UInt32(bitPattern: result)))
+            }
             if result == kIOReturnNotPermitted {
                 denied.append(device)
                 agent.permissions.markInputMonitoringNeeded()

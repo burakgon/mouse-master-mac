@@ -15,10 +15,20 @@ ARCHS=${ARCHS:-$(uname -m)}
 ARCH_FLAGS=()
 for a in $ARCHS; do ARCH_FLAGS+=(--arch "$a"); done
 
-# Ad-hoc signing by default: locally built apps run without a developer certificate.
-# Set CODESIGN_IDENTITY to sign with a certificate (it must not be expired or revoked,
-# or macOS treats the app as malware).
-CODESIGN_IDENTITY=${CODESIGN_IDENTITY:--}
+# Signed with a local identity by default (scripts/make-signing-identity.sh creates it once):
+# macOS then keeps the Input Monitoring and Accessibility permissions across updates.
+# CODESIGN_IDENTITY=- signs ad hoc; any other value names a certificate (it must not be
+# expired or revoked, or macOS treats the app as malware).
+KEYCHAIN_ARGS=()
+if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
+    if KEYCHAIN=$(scripts/make-signing-identity.sh 2>/dev/null | tail -1) && [[ -f "$KEYCHAIN" ]]; then
+        security unlock-keychain -p "$(cat "$HOME/Library/Application Support/Mouse Master/Signing/keychain-password")" "$KEYCHAIN"
+        CODESIGN_IDENTITY="Mouse Master Local Signing"
+        KEYCHAIN_ARGS=(--keychain "$KEYCHAIN")
+    else
+        CODESIGN_IDENTITY=-
+    fi
+fi
 
 echo "==> Building Mouse Master $VERSION ($BUILD_NUMBER) for $ARCHS"
 swift build -c release "${ARCH_FLAGS[@]}" --product MouseMaster
@@ -56,7 +66,7 @@ cp "$ICON" "$AGENT/Contents/Resources/AppIcon.icns"
 cp Resources/Artwork/*.svg "$APP/Contents/Resources/"
 
 echo "==> Signing with: $CODESIGN_IDENTITY"
-SIGN=(codesign --force --options runtime --timestamp=none --sign "$CODESIGN_IDENTITY")
+SIGN=(codesign --force --options runtime --timestamp=none ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} --sign "$CODESIGN_IDENTITY")
 "${SIGN[@]}" --identifier com.burakgon.MouseMaster.mmctl "$APP/Contents/Helpers/mmctl"
 "${SIGN[@]}" "$AGENT"
 "${SIGN[@]}" "$APP"
