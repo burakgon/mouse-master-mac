@@ -262,15 +262,21 @@ final class Agent {
         }
     }
 
+    /// The settings window is a second instance of this same application.
     static func openSettingsApp() {
-        // The settings app is the bundle this agent lives in.
-        var url = Bundle.main.bundleURL
-        for _ in 0..<4 { url.deleteLastPathComponent() }
-        if url.pathExtension == "app" {
-            NSWorkspace.shared.openApplication(at: url, configuration: .init())
-        } else if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: MMPaths.appBundleID) {
-            NSWorkspace.shared.openApplication(at: app, configuration: .init())
+        let url = Bundle.main.bundleURL
+        guard url.pathExtension == "app" else { return }
+        // Already open: bring it forward.
+        let me = ProcessInfo.processInfo.processIdentifier
+        if let ui = NSRunningApplication.runningApplications(withBundleIdentifier: MMPaths.appBundleID)
+            .first(where: { $0.processIdentifier != me && $0.activationPolicy == .regular }) {
+            ui.activate()
+            return
         }
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        config.arguments = ["--settings"]
+        NSWorkspace.shared.openApplication(at: url, configuration: config)
     }
 
     // MARK: Quitting
@@ -297,6 +303,8 @@ final class Agent {
         SingleInstance.release()
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
+        config.arguments = ["--agent"]
+        config.activates = false
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config) { _, _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { Agent.shared.terminate() } }
         }

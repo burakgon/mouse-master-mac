@@ -6,7 +6,6 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "MouseMaster", targets: ["MouseMaster"]),
-        .executable(name: "MouseMasterAgent", targets: ["MouseMasterAgent"]),
         .executable(name: "mmctl", targets: ["mmctl"]),
     ],
     targets: [
@@ -17,21 +16,21 @@ let package = Package(
         ),
         // Shared by every process: configuration, actions, snapshots, IPC and the pure engines.
         .target(name: "MouseMasterKit"),
-        // The background agent: devices, actions, smooth scrolling, menu bar, HUD.
-        .executableTarget(
-            name: "MouseMasterAgent",
+        // The background agent: devices, actions, smooth scrolling, menu bar, HUD. It runs
+        // as the app's own executable with --agent, so macOS sees a single application.
+        .target(
+            name: "AgentCore",
             dependencies: ["HIDPP", "MouseMasterKit"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
-                .linkedFramework("ServiceManagement"),
                 .linkedFramework("UserNotifications"),
             ]
         ),
-        // The settings app (SwiftUI). Only runs while its window is open.
+        // The app: the settings window (SwiftUI), or the agent when started with --agent.
         .executableTarget(
             name: "MouseMaster",
-            dependencies: ["MouseMasterKit"],
+            dependencies: ["AgentCore", "MouseMasterKit"],
             linkerSettings: [.linkedFramework("ServiceManagement"), .linkedFramework("Carbon")]
         ),
         // Command line client and diagnostics.

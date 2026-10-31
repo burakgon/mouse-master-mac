@@ -3,7 +3,6 @@ import Carbon
 import MouseMasterKit
 import SwiftUI
 
-@main
 struct MouseMasterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
@@ -44,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exit(0)
         }
         KeyNames.layoutName = KeyboardLayout.name(for:)
+        // The bundle is a UI element so the agent instance stays out of the Dock; the
+        // settings window is a regular app with a Dock icon and a menu bar.
+        NSApp.setActivationPolicy(.regular)
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.activate()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

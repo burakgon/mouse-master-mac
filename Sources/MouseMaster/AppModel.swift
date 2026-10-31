@@ -337,11 +337,21 @@ enum AgentLauncher {
 
     static var service: SMAppService { SMAppService.agent(plistName: MMPaths.agentPlistName) }
 
-    static var agentAppURL: URL {
-        Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LoginItems/MouseMasterAgent.app")
+    /// The launch agent's definition inside the bundle; missing when run from a build folder.
+    static var isBundled: Bool {
+        FileManager.default.fileExists(atPath: Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Library/LaunchAgents/\(MMPaths.agentPlistName)").path)
     }
 
-    static var isBundled: Bool { FileManager.default.fileExists(atPath: agentAppURL.path) }
+    /// Runs the agent outside launchd (for this session only): a second instance of this app.
+    static func startUnmanaged() {
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        config.arguments = ["--agent"]
+        config.activates = false
+        config.addsToRecentItems = false
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config)
+    }
 
     static var status: Status {
         guard isBundled else { return .unavailable }
@@ -369,7 +379,7 @@ enum AgentLauncher {
         if service.status == .enabled {
             kickstart(restart: false)
         } else {
-            NSWorkspace.shared.openApplication(at: agentAppURL, configuration: .init())
+            startUnmanaged()
         }
     }
 
@@ -387,7 +397,7 @@ enum AgentLauncher {
             kickstart(restart: false)
         } else {
             // Not allowed to run at login: run it for this session anyway.
-            NSWorkspace.shared.openApplication(at: agentAppURL, configuration: .init())
+            startUnmanaged()
         }
     }
 
@@ -412,9 +422,7 @@ enum AgentLauncher {
             } else {
                 try service.unregister()
                 // Keep it running until logout.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    NSWorkspace.shared.openApplication(at: agentAppURL, configuration: .init())
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { startUnmanaged() }
             }
         } catch {
             NSLog("Mouse Master: launch at login: \(error)")

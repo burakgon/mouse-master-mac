@@ -32,15 +32,12 @@ fi
 
 echo "==> Building Mouse Master $VERSION ($BUILD_NUMBER) for $ARCHS"
 swift build -c release "${ARCH_FLAGS[@]}" --product MouseMaster
-swift build -c release "${ARCH_FLAGS[@]}" --product MouseMasterAgent
 swift build -c release "${ARCH_FLAGS[@]}" --product mmctl
 BIN=$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)
 
 APP="build/Mouse Master.app"
-AGENT="$APP/Contents/Library/LoginItems/MouseMasterAgent.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents" "$APP/Contents/Helpers" \
-         "$AGENT/Contents/MacOS" "$AGENT/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents" "$APP/Contents/Helpers"
 
 ICON=build/AppIcon.icns
 if [[ ! -f $ICON || Resources/Artwork/AppIcon.svg -nt $ICON || scripts/make-icon.swift -nt $ICON ]]; then
@@ -54,21 +51,16 @@ plist() {
 }
 
 plist Resources/Bundle/App-Info.plist "$APP/Contents/Info.plist"
-plist Resources/Bundle/Agent-Info.plist "$AGENT/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
-printf 'APPL????' > "$AGENT/Contents/PkgInfo"
 cp Resources/Bundle/com.burakgon.MouseMaster.Agent.plist "$APP/Contents/Library/LaunchAgents/"
 cp "$BIN/MouseMaster" "$APP/Contents/MacOS/Mouse Master"
-cp "$BIN/MouseMasterAgent" "$AGENT/Contents/MacOS/MouseMasterAgent"
 cp "$BIN/mmctl" "$APP/Contents/Helpers/mmctl"
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
-cp "$ICON" "$AGENT/Contents/Resources/AppIcon.icns"
 cp Resources/Artwork/*.svg "$APP/Contents/Resources/"
 
 echo "==> Signing with: $CODESIGN_IDENTITY"
 SIGN=(codesign --force --options runtime --timestamp=none ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} --sign "$CODESIGN_IDENTITY")
 "${SIGN[@]}" --identifier com.burakgon.MouseMaster.mmctl "$APP/Contents/Helpers/mmctl"
-"${SIGN[@]}" "$AGENT"
 "${SIGN[@]}" "$APP"
 codesign --verify --deep --strict "$APP"
 echo "==> Built $APP ($(du -sh "$APP" | cut -f1))"

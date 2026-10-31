@@ -17,10 +17,10 @@ stop_agent() {
     if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
         launchctl kill TERM "$DOMAIN/$LABEL" 2>/dev/null || true
     fi
-    pkill -TERM -x MouseMasterAgent 2>/dev/null || true
-    pkill -x "Mouse Master" 2>/dev/null || true
+    pkill -TERM -x MouseMasterAgent 2>/dev/null || true   # agents of older versions
+    pkill -TERM -x "Mouse Master" 2>/dev/null || true
     for _ in $(seq 1 30); do
-        pgrep -x MouseMasterAgent >/dev/null || break
+        pgrep -x "Mouse Master" >/dev/null || pgrep -x MouseMasterAgent >/dev/null || break
         sleep 0.1
     done
 }
