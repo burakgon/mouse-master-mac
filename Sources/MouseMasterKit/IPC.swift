@@ -105,6 +105,48 @@ public enum IPCCoding {
     }
 }
 
+/// Closes a descriptor once every dispatch source watching it has been cancelled. Cancel
+/// handlers hold it strongly, so the descriptor is closed even when the connection object
+/// is gone by then.
+final class DescriptorCloser: @unchecked Sendable {
+    let fd: Int32
+    private let lock = NSLock()
+    private var sources = 0
+    private var closed = false
+
+    init(fd: Int32) { self.fd = fd }
+
+    func addSource() {
+        lock.lock()
+        sources += 1
+        lock.unlock()
+    }
+
+    func sourceCancelled() {
+        lock.lock()
+        sources -= 1
+        let done = sources == 0
+        lock.unlock()
+        if done { closeNow() }
+    }
+
+    /// Closes right away unless a source still watches the descriptor.
+    func closeIfUnwatched() {
+        lock.lock()
+        let unwatched = sources == 0
+        lock.unlock()
+        if unwatched { closeNow() }
+    }
+
+    private func closeNow() {
+        lock.lock()
+        let already = closed
+        closed = true
+        lock.unlock()
+        if !already { Darwin.close(fd) }
+    }
+}
+
 /// A newline delimited message stream over a connected socket. All callbacks and calls
 /// happen on `queue`.
 public final class LineConnection {
@@ -118,11 +160,12 @@ public final class LineConnection {
     private var writeSource: DispatchSourceWrite?
     private var inBuffer: [UInt8] = []
     private var outBuffer: [UInt8] = []
-    private var liveSources = 0
+    private let closer: DescriptorCloser
 
     public init(fd: Int32, queue: DispatchQueue) {
         self.fd = fd
         self.queue = queue
+        closer = DescriptorCloser(fd: fd)
         _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
         var on: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
@@ -131,15 +174,10 @@ public final class LineConnection {
     public func start() {
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in self?.readAvailable() }
-        source.setCancelHandler { [weak self] in self?.sourceCancelled() }
-        liveSources += 1
+        source.setCancelHandler { [closer] in closer.sourceCancelled() }
+        closer.addSource()
         readSource = source
         source.resume()
-    }
-
-    private func sourceCancelled() {
-        liveSources -= 1
-        if liveSources == 0 { Darwin.close(fd) }
     }
 
     private func readAvailable() {
@@ -197,8 +235,8 @@ public final class LineConnection {
         } else if writeSource == nil {
             let w = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: queue)
             w.setEventHandler { [weak self] in self?.flush() }
-            w.setCancelHandler { [weak self] in self?.sourceCancelled() }
-            liveSources += 1
+            w.setCancelHandler { [closer] in closer.sourceCancelled() }
+            closer.addSource()
             writeSource = w
             w.resume()
         }
@@ -214,8 +252,8 @@ public final class LineConnection {
         if let r = readSource {
             readSource = nil
             r.cancel()
-        } else if liveSources == 0 {
-            Darwin.close(fd)
+        } else {
+            closer.closeIfUnwatched()
         }
         let handler = onClose
         onClose = nil
@@ -279,7 +317,14 @@ public final class LineServer {
     private func acceptAll() {
         while true {
             let client = accept(fd, nil, nil)
-            if client < 0 { return }
+            if client < 0 {
+                if errno == EMFILE || errno == ENFILE {
+                    // Out of descriptors: wait a moment instead of spinning on the backlog.
+                    source?.suspend()
+                    queue.asyncAfter(deadline: .now() + 1) { [weak self] in self?.source?.resume() }
+                }
+                return
+            }
             var uid: uid_t = 0, gid: gid_t = 0
             guard getpeereid(client, &uid, &gid) == 0, uid == getuid() else {
                 Darwin.close(client)

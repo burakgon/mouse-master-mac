@@ -13,6 +13,13 @@ if arguments.contains("--trace") {
 }
 setvbuf(stderr, nil, _IONBF, 0)
 
+// launchd starts agents with a limit of 256 open files; leave some headroom.
+var fileLimit = rlimit()
+if getrlimit(RLIMIT_NOFILE, &fileLimit) == 0 && fileLimit.rlim_cur < 2048 {
+    fileLimit.rlim_cur = min(2048, fileLimit.rlim_max)
+    setrlimit(RLIMIT_NOFILE, &fileLimit)
+}
+
 enum SingleInstance {
     nonisolated(unsafe) private static var fd: Int32 = -1
 
