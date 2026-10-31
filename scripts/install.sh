@@ -53,15 +53,19 @@ elif [[ -d /opt/homebrew/bin && -w /opt/homebrew/bin ]]; then
 fi
 
 echo "==> Registering the background agent"
-"$DEST/Contents/MacOS/Mouse Master" --register-agent || true
-sleep 0.5
-launchctl kickstart "$DOMAIN/$LABEL" 2>/dev/null || true
-
-for _ in $(seq 1 50); do
-    [[ -S "$HOME/Library/Application Support/Mouse Master/agent.sock" ]] && pgrep -x MouseMasterAgent >/dev/null && break
-    sleep 0.1
+# macOS ties the registration to the app's signature, so it is renewed on every install.
+# Right after the bundle is replaced the renewal can race; check and try again.
+agent_running() { launchctl print "$DOMAIN/$LABEL" 2>/dev/null | grep -q "state = running"; }
+for attempt in 1 2 3 4; do
+    "$DEST/Contents/MacOS/Mouse Master" --register-agent || true
+    for _ in $(seq 1 25); do
+        agent_running && break
+        sleep 0.2
+    done
+    agent_running && break
+    sleep 1
 done
-if pgrep -x MouseMasterAgent >/dev/null; then
+if agent_running; then
     echo "==> The agent is running"
 else
     echo "!!  The agent did not start; open Mouse Master to finish setting it up."

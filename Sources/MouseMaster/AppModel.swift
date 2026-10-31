@@ -359,6 +359,8 @@ enum AgentLauncher {
     static func reregister() {
         guard isBundled else { return }
         try? service.unregister()
+        // Let launchd forget the old job before the new one is submitted.
+        Thread.sleep(forTimeInterval: 0.4)
         do {
             try service.register()
         } catch {
