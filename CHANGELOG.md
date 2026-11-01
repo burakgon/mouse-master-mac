@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Installing an update no longer pauses the mouse while Mouse Master checks the download's
+  signature.
+
 ## 1.1.0
 
 - Updates from GitHub. Mouse Master looks for a new version a few times a day (Settings ›

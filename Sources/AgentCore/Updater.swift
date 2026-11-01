@@ -145,8 +145,13 @@ final class Updater {
             let installed = Bundle.main.bundleURL
             let app = try await Self.download(archive, near: installed, userAgent: userAgent)
             change { $0.phase = .installing }
-            try Self.verify(app, team: team, newerThan: agent.version)
-            try Self.replace(installed, with: app)
+            // Off the main actor: checking the signature of the whole bundle takes a moment, and
+            // the main run loop handles the mouse.
+            let current = agent.version
+            try await Task.detached(priority: .userInitiated) {
+                try Self.verify(app, team: team, newerThan: current)
+                try Self.replace(installed, with: app)
+            }.value
             Log.info("installed Mouse Master \(release.version); restarting")
             restart()
             return nil
