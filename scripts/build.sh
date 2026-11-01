@@ -26,25 +26,9 @@ for a in $ARCHS; do ARCH_FLAGS+=(--arch "$a"); done
 # hoc), a "Developer ID Application" certificate in the keychain, the local identity that
 # scripts/make-signing-identity.sh creates, ad hoc. A certificate must not be expired or
 # revoked, or macOS treats the app as malware.
-
-# The SHA-1 of the valid Developer ID identity that expires last: a team can have several
-# certificates with the same name, and codesign refuses a name that matches two.
-developer_id() {
-    local certs hash end best="" best_end=-1
-    certs=$(security find-certificate -a -Z -p -c "Developer ID Application" 2>/dev/null) || return 0
-    for hash in $(security find-identity -v -p codesigning 2>/dev/null \
-            | sed -n 's/^ *[0-9]*) \([0-9A-F]\{40\}\) "Developer ID Application: .*/\1/p'); do
-        end=$(awk -v h="$hash" '$0 == "SHA-1 hash: " h { on = 1; next } on { print } on && /END CERTIFICATE/ { exit }' <<< "$certs" \
-            | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
-        end=$(date -j -f "%b %e %T %Y %Z" "$end" +%s 2>/dev/null || echo 0)
-        if (( end > best_end )); then best=$hash; best_end=$end; fi
-    done
-    echo "$best"
-}
-
 KEYCHAIN_ARGS=()
 if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
-    CODESIGN_IDENTITY=$(developer_id)
+    CODESIGN_IDENTITY=$(scripts/developer-id.sh)
     if [[ -n "$CODESIGN_IDENTITY" ]]; then
         :
     elif KEYCHAIN=$(scripts/make-signing-identity.sh 2>/dev/null | tail -1) && [[ -f "$KEYCHAIN" ]]; then
