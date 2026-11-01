@@ -280,6 +280,65 @@ enum NaturalScrolling {
     }
 }
 
+// MARK: - What is under the pointer
+
+/// The window server sends scroll and gesture events to the window under the pointer,
+/// which need not belong to the frontmost application.
+@MainActor
+enum PointerTarget {
+    private static var chromium: [String: Bool] = [:]
+    /// Bundles laid out differently that are Chromium all the same.
+    private static let chromiumBundleIDs: Set<String> = ["company.thebrowser.Browser", "company.thebrowser.dia"]
+
+    /// Whether the window under the pointer belongs to a Chromium browser (see `ChromiumPinch`).
+    /// `defaults write com.burakgon.MouseMaster ChromiumPinchOpening -bool false` turns this off.
+    static func isChromiumBrowser() -> Bool {
+        guard UserDefaults.standard.object(forKey: "ChromiumPinchOpening") as? Bool ?? true,
+              let pid = windowOwnerUnderPointer(),
+              let app = NSRunningApplication(processIdentifier: pid), let url = app.bundleURL else { return false }
+        if let known = chromium[url.path] { return known }
+        let result = app.bundleIdentifier.map(chromiumBundleIDs.contains) == true || isChromiumBrowser(bundle: url)
+        chromium[url.path] = result
+        return result
+    }
+
+    /// Owner of the frontmost window under the pointer, floating windows and panels included
+    /// (they get the events). The Dock level and above is left out: the Dock spans the whole
+    /// screen and lets the pointer through, and so do many overlays up there. Taking the wrong
+    /// window can only make `isChromiumBrowser` answer no.
+    static func windowOwnerUnderPointer() -> pid_t? {
+        guard let point = CGEvent(source: nil)?.location,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return nil }
+        let me = getpid()
+        let dockLevel = Int(CGWindowLevelForKey(.dockWindow))
+        for w in windows {
+            guard let layer = w[kCGWindowLayer as String] as? Int, layer >= 0, layer < dockLevel,
+                  let pid = w[kCGWindowOwnerPID as String] as? pid_t, pid != me,
+                  (w[kCGWindowAlpha as String] as? Double ?? 1) > 0.05,
+                  let bounds = w[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds), rect.contains(point) else { continue }
+            return pid
+        }
+        return nil
+    }
+
+    /// Chromium browsers keep their helper apps inside "<Name> Framework.framework"; Electron
+    /// apps keep them next to it (and leave pinch zoom off).
+    nonisolated static func isChromiumBrowser(bundle: URL) -> Bool {
+        let fm = FileManager.default
+        let frameworks = bundle.appendingPathComponent("Contents/Frameworks")
+        guard let items = try? fm.contentsOfDirectory(atPath: frameworks.path) else { return false }
+        for name in items where name.hasSuffix(".framework") && name != "Electron Framework.framework" {
+            let helpers = frameworks.appendingPathComponent(name).appendingPathComponent("Versions/Current/Helpers")
+            if let h = try? fm.contentsOfDirectory(atPath: helpers.path), h.contains(where: { $0.hasSuffix("Helper (Renderer).app") }) {
+                return true
+            }
+        }
+        return false
+    }
+}
+
 /// Hidden knobs for the feel of scrolling, read once at start:
 ///   defaults write com.burakgon.MouseMaster ScrollSmoothing -float 0.065
 ///   defaults write com.burakgon.MouseMaster ScrollPointsPerNotch -float 42

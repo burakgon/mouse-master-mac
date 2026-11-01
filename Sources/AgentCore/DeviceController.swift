@@ -138,7 +138,6 @@ final class DeviceController {
     private var wheelAccel: WheelAccelerator?
     private var thumbLit = false
     private lazy var scroller = SmoothScroller(synth: agent.synth)
-    private lazy var zoomer = PinchZoomer(synth: agent.synth)
 
     // Settings
     private var appliedSettings: DeviceSettings?
@@ -174,7 +173,7 @@ final class DeviceController {
         ready = false
         releaseAllHeld()
         scroller.stop()
-        zoomer.cancel()
+        agent.zoomer.finish()
         if var s = snapshot {
             s.online = false
             s.busy = false
@@ -605,6 +604,7 @@ final class DeviceController {
         guard let dev = device, let info, ready, reachable, !isClosed else { return }
         releaseAllHeld()
         scroller.stop()
+        agent.zoomer.cancel()
         for cid in analytics { try? await dev.setControlAnalytics(cid, enabled: false) }
         analytics = []
         for c in info.controls where c.isDivertable && !c.isVirtual && applied[c.cid] != Diversion(divert: false, rawXY: false) {
@@ -720,7 +720,7 @@ final class DeviceController {
                 var tracker = g.tracker
                 gesture = nil
                 gestureOutputs(tracker.release(), key: key, set: tracker.set)
-                if tracker.set.mode == .zoom { zoomer.finish() }
+                if tracker.set.mode == .zoom { agent.zoomer.finish() }
             }
         } else {
             perform(agent.executor.release(action))
@@ -747,7 +747,8 @@ final class DeviceController {
             case .scroll(let dx, let dy):
                 scroller.direct(dx: dx, dy: dy)
             case .magnify(let amount):
-                zoomer.add(amount)
+                // Held like fingers on a trackpad: the pinch lasts until the button is released.
+                agent.zoomer.add(amount, idleEnd: 2)
             }
         }
     }
@@ -784,9 +785,9 @@ final class DeviceController {
                 }
             case .magnify(let amount):
                 // A turn to the right zooms in; the thumb wheel direction setting applies.
-                zoomer.add(amount)
+                agent.zoomer.add(amount)
             case .magnifyEnd:
-                zoomer.finish()
+                agent.zoomer.finish()
             case .tap:
                 if let id {
                     agent.emitButton(device: id, control: "thumbwheel-tap", pressed: true)
@@ -803,6 +804,11 @@ final class DeviceController {
         wheelAccel = accel
         // Rolling away from you scrolls up (reveals what is above) unless scrolling is natural.
         scroller.add(dx: 0, dy: natural ? points : -points)
+    }
+
+    /// A pinch begins: scrolling that is still gliding would end it right away.
+    func stopScrolling() {
+        scroller.stop()
     }
 
     private func releaseAllHeld() {

@@ -125,10 +125,22 @@ final class InputSynth {
     private static let pointsPerLine = 12.0
     private var lineCarryX = 0.0, lineCarryY = 0.0
 
+    /// Ends the pinch in progress; set by `PinchZoomer` while it pinches. Scrolling calls it
+    /// first: apps take scrolling during a pinch as part of the pinch, and Chromium then
+    /// ignores the scrolling once the pinch ends, until the wheel rests for half a second.
+    var endPinch: (() -> Void)?
+
+    private func endPinchBeforeScrolling() {
+        guard let end = endPinch else { return }
+        endPinch = nil
+        end()
+    }
+
     /// Continuous (trackpad-like) scrolling in points. Positive `dx` reveals content to
     /// the right, positive `dy` content below.
     func scroll(dx: Int, dy: Int) {
         guard dx != 0 || dy != 0 else { return }
+        endPinchBeforeScrolling()
         guard let e = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 2,
                               wheel1: Int32(clamping: -dy), wheel2: Int32(clamping: -dx), wheel3: 0) else { return }
         e.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
@@ -149,6 +161,7 @@ final class InputSynth {
 
     /// Classic line based scrolling (one wheel notch per unit).
     func scrollLines(dx: Int, dy: Int) {
+        endPinchBeforeScrolling()
         guard let e = CGEvent(scrollWheelEvent2Source: source, units: .line, wheelCount: 2,
                               wheel1: Int32(clamping: -dy), wheel2: Int32(clamping: -dx), wheel3: 0) else { return }
         e.location = cursor
