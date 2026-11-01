@@ -308,6 +308,20 @@ struct SettingsPage: View {
                 }
             }
 
+            if let update = model.state?.update {
+                Section {
+                    Toggle(isOn: bind(\.checkForUpdates)) {
+                        Text("Check for updates automatically")
+                        Text("Looks for a new version on GitHub a few times a day.")
+                    }
+                    UpdateRow(update: update, current: model.state?.agentVersion ?? "") { cmd in
+                        model.command(IPCRequest(cmd: cmd))
+                    }
+                } header: {
+                    Text("Updates")
+                }
+            }
+
             Section {
                 LabeledContent("Mouse Master", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")
                 LabeledContent("Background service", value: model.connected ? "Running (\(model.state?.agentVersion ?? "?"))" : "Not running")
@@ -355,6 +369,59 @@ struct SettingsPage: View {
               let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8),
               (try? JSONDecoder().decode(Config.self, from: data)) != nil else { return }
         model.command(IPCRequest(cmd: "set-config", name: text))
+    }
+}
+
+/// Where updates stand, and the button for the next step.
+struct UpdateRow: View {
+    let update: UpdateStatus
+    let current: String
+    let send: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
+            }
+            Spacer()
+            switch update.phase {
+            case .checking, .downloading, .installing:
+                ProgressView().controlSize(.small)
+            case .idle:
+                if update.available {
+                    if let page = update.pageURL.flatMap(URL.init(string:)) {
+                        Button("Release Notes") { NSWorkspace.shared.open(page) }
+                    }
+                    Button("Install and Restart") { send("install-update") }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Check Now") { send("check-updates") }
+                }
+            }
+        }
+    }
+
+    private var title: String {
+        let v = update.latestVersion ?? ""
+        switch update.phase {
+        case .checking: return "Checking for updates…"
+        case .downloading: return "Downloading Mouse Master \(v)…"
+        case .installing: return "Installing Mouse Master \(v)…"
+        case .idle:
+            if update.available { return "Mouse Master \(v) is available" }
+            if update.error != nil { return "Could not check for updates" }
+            return update.lastChecked == nil ? "Version \(current)" : "Mouse Master is up to date"
+        }
+    }
+
+    private var detail: String? {
+        if update.phase == .idle, let error = update.error { return error }
+        if update.available { return "You have version \(current). Mouse Master restarts to finish." }
+        if let checked = update.lastChecked {
+            return "Version \(current) · checked \(checked.formatted(.relative(presentation: .named)))"
+        }
+        return nil
     }
 }
 

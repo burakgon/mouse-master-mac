@@ -22,6 +22,8 @@ final class Agent {
     lazy var devices = DeviceManager(agent: self)
     lazy var server = IPCServer(agent: self)
     lazy var statusMenu = StatusMenu(agent: self)
+    lazy var updater = Updater(agent: self)
+    private let notificationHandler = NotificationHandler()
 
     private(set) var systemNatural = NaturalScrolling.current
     private var offline: [String: DeviceSnapshot] = [:]
@@ -107,6 +109,12 @@ final class Agent {
         // The first look at the window list takes tens of milliseconds: not during the first zoom.
         DispatchQueue.main.async { _ = PointerTarget.windowOwnerUnderPointer() }
         installSignalHandlers()
+        // Notifications need a bundle (not available when run from a terminal).
+        if Bundle.main.bundleIdentifier != nil {
+            UNUserNotificationCenter.current().delegate = notificationHandler
+        }
+        updater.start()
+        greetAfterUpdate()
         Log.info("Mouse Master agent \(version) started (accessibility: \(permissions.accessibility))")
     }
 
@@ -150,7 +158,8 @@ final class Agent {
             permissions: Permissions(accessibility: permissions.accessibility,
                                      inputMonitoringNeeded: permissions.inputMonitoringNeeded,
                                      inputMonitoring: permissions.inputMonitoring),
-            activeApp: apps.current, conflicts: conflicts.running, systemNaturalScrolling: systemNatural)
+            activeApp: apps.current, conflicts: conflicts.running, systemNaturalScrolling: systemNatural,
+            update: updater.isAvailable ? updater.status : nil)
     }
 
     /// Online devices first.
@@ -265,6 +274,30 @@ final class Agent {
             content.title = "\(name) battery is low"
             content.body = "\(percent)% left. Charge it soon to keep it going."
             center.add(UNNotificationRequest(identifier: "low-battery-\(name)", content: content, trigger: nil))
+        }
+    }
+
+    /// Right after an update: say so, and open the settings window again if the update
+    /// closed it.
+    private func greetAfterUpdate() {
+        let defaults = UserDefaults.standard
+        let previous = defaults.string(forKey: "lastRunVersion")
+        defaults.set(version, forKey: "lastRunVersion")
+        if let previous, AppVersion.isNewer(version, than: previous) {
+            Log.info("updated from \(previous) to \(version)")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.osd(symbol: "arrow.down.circle", title: "Updated to \(self.version)")
+                }
+            }
+        }
+        let marker = Updater.reopenMarker
+        if FileManager.default.fileExists(atPath: marker.path) {
+            try? FileManager.default.removeItem(at: marker)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                MainActor.assumeIsolated { Agent.openSettingsApp() }
+            }
         }
     }
 

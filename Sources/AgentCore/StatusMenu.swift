@@ -79,6 +79,21 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
+        let update = agent.updater.status
+        if update.phase == .downloading || update.phase == .installing {
+            let i = NSMenuItem(title: "Installing Mouse Master \(update.latestVersion ?? "")…", action: nil, keyEquivalent: "")
+            i.isEnabled = false
+            i.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+            menu.addItem(i)
+            menu.addItem(.separator())
+        } else if update.available, let v = update.latestVersion {
+            let i = NSMenuItem(title: "Update to Mouse Master \(v)…", action: #selector(showUpdate), keyEquivalent: "")
+            i.target = self
+            i.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+            menu.addItem(i)
+            menu.addItem(.separator())
+        }
+
         let controllers = agent.onlineControllers
         if controllers.isEmpty {
             let i = NSMenuItem(title: "No Logitech mouse connected", action: nil, keyEquivalent: "")
@@ -100,6 +115,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         open.target = self
         open.image = NSImage(systemSymbolName: "slider.horizontal.3", accessibilityDescription: nil)
         menu.addItem(open)
+        if agent.updater.isAvailable {
+            let check = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+            check.target = self
+            check.isEnabled = !agent.updater.isBusy
+            check.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
+            menu.addItem(check)
+        }
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Mouse Master", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -204,6 +226,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         var g = agent.store.config.general
         g.paused.toggle()
         agent.setGeneral(g)
+    }
+
+    @objc private func showUpdate() {
+        agent.updater.presentUpdate()
+    }
+
+    @objc private func checkForUpdates() {
+        agent.updater.checkAndReport()
     }
 
     @objc private func openSettings() {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Updates from GitHub. Mouse Master looks for a new version a few times a day (Settings ›
+  Updates turns this off) and offers to install it: from a notification, the menu bar, Settings › Updates or `mmctl update`. It installs
+  only an app signed by the same developer, then restarts by itself and reopens its window.
+- Signed with Developer ID and notarized: the download opens without warnings, and macOS keeps
+  the Accessibility and Input Monitoring permissions across updates.
+- Updating no longer leaves a "Mouse Master quit unexpectedly" report behind. launchd killed the
+  first start of every new build because it did not recognise the signature.
 - Smooth zoom starts at once in Chromium browsers (Chrome, Brave, Edge, Vivaldi, Opera, Arc).
   They ignore the start of every pinch, up to half the page size; the pinch now opens with one
   step they swallow, so zooming no longer waits for a third of a turn of the thumb wheel.

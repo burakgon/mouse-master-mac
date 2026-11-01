@@ -7,7 +7,7 @@
 ### Your Logitech mouse, without Logi Options+.
 
 Every button, gesture and wheel of your MX Master and MX Anywhere, in a tiny native Mac app.<br>
-**~14 MB of memory. 0% CPU at rest. No account, no analytics, no network access. Open source.**
+**~14 MB of memory. 0% CPU at rest. No account, no analytics. Open source.**
 
 [![Latest release](https://img.shields.io/github/v/release/burakgon/mouse-master-mac?label=download&color=5b7cff)](https://github.com/burakgon/mouse-master-mac/releases/latest)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000?logo=apple&logoColor=white)](#install)
@@ -41,7 +41,7 @@ small native process. It does what you need Options+ for, and a few things it do
 | Memory at rest                               | **~14 MB**, one process     | hundreds of MB, many processes  |
 | CPU at rest                                  | **0%**: no timers, no polling | background activity             |
 | Buttons work again after the mouse wakes up  | **in under a second**       | a few seconds                   |
-| Analytics, account, network access           | **none**                    | yes                             |
+| Account, analytics                           | **none**                    | yes                             |
 | Scroll direction per mouse, trackpad untouched | ✅                        | ✅                              |
 | Smooth scrolling and smooth pinch zoom       | ✅                          | ✅                              |
 | Scriptable from the command line             | ✅ `mmctl`                  | —                               |
@@ -128,17 +128,15 @@ ratchet force on mice that have it (MX Master 4).
 ### Download
 
 1. [Download **Mouse-Master.zip**](https://github.com/burakgon/mouse-master-mac/releases/latest/download/Mouse-Master.zip),
-   unzip it and move **Mouse Master** into **Applications**.
-2. The app is not notarized by Apple yet, so macOS stops the first launch. Either run
-
-   ```sh
-   xattr -dr com.apple.quarantine "/Applications/Mouse Master.app"
-   ```
-
-   or open it once, then click **Open Anyway** in System Settings › Privacy & Security.
-3. Open Mouse Master. It walks you through the two switches macOS asks for, once:
+   unzip it and move **Mouse Master** into **Applications**. It is signed with Developer ID and
+   notarized by Apple, so it opens like any other app.
+2. Open Mouse Master. It walks you through the two switches macOS asks for, once:
    **Input Monitoring** (to talk to the mouse) and **Accessibility** (to press keys, click and
    scroll for you). That's it: it starts with your Mac from now on.
+
+Mouse Master looks for new versions on GitHub a few times a day and offers to install them: click
+the notification, **Update to Mouse Master …** in the menu bar, or **Install and Restart** in
+Settings › Updates. It installs only an app signed by the same developer, then restarts by itself.
 
 ### Build from source
 
@@ -151,8 +149,9 @@ scripts/install.sh
 ```
 
 The script builds a release, installs it into `/Applications`, registers the background service
-and opens the app. Builds are signed with a local certificate that the script creates once, so
-macOS keeps the permissions when you update.
+and opens the app. Builds are signed with your Developer ID certificate when the keychain has one,
+and otherwise with a local certificate that the script creates once, so macOS keeps the
+permissions when you update.
 
 ## Supported mice
 
@@ -185,7 +184,8 @@ Options+ with its own uninstaller.
 
 Input Monitoring is how macOS lets an app talk to a mouse over HID. Accessibility is what lets an
 app press keys, click and scroll on your behalf. Mouse Master uses both for that and nothing
-else: it has no network access, and no data ever leaves your Mac.
+else. Nothing about you or your Mac leaves it: its only network request asks GitHub for the
+latest release, and Settings › Updates turns that off.
 </details>
 
 <details>
@@ -243,6 +243,7 @@ $ mmctl bind middle mission-control
 $ mmctl bind thumbwheel volume
 $ mmctl watch          # live button presses and gestures
 $ mmctl actions        # every built-in action
+$ mmctl update         # look for a new version (mmctl update install installs it)
 ```
 
 Fine-tune the feel without rebuilding:
@@ -291,7 +292,7 @@ The code is organised as:
 
 - MX Keys and other Logitech keyboards
 - Pairing devices with Logi Bolt and Unifying receivers
-- Notarized builds and a Homebrew cask
+- A Homebrew cask
 - Artwork for more mice
 - Translations
 
@@ -307,6 +308,22 @@ scripts/build.sh                       # build/Mouse Master.app
 
 Run one background service at a time: `launchctl kill TERM gui/$(id -u)/com.burakgon.MouseMaster.Agent`
 stops the installed one.
+
+### Releasing
+
+Bump `VERSION`, describe the changes under a `## <version>` heading in `CHANGELOG.md`, then push a
+tag:
+
+```sh
+git commit -am "Mouse Master 1.2.0" && git tag v1.2.0 && git push origin main v1.2.0
+```
+
+The [Release workflow](.github/workflows/release.yml) tests, builds a universal app, signs it with
+Developer ID, notarizes it and publishes the GitHub release; installed copies find it within a
+few hours. It needs these repository secrets: `DEVELOPER_ID_P12_BASE64` and
+`DEVELOPER_ID_P12_PASSWORD` (the certificate), and `NOTARY_API_KEY_BASE64`, `NOTARY_API_KEY_ID`
+and `NOTARY_API_ISSUER_ID` (an App Store Connect API key). `scripts/release.sh --publish` does the
+same from a Mac whose keychain holds the certificate and a `macos-notary` notarytool profile.
 
 ## Acknowledgements
 

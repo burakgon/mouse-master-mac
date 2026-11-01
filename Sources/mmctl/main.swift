@@ -26,6 +26,7 @@ usage: mmctl <command> [arguments]
   reapply                      write every setting to the devices again
   raw [--device ID] HEX        HID++ call: feature index, function, parameters
   inject [--device ID] HEX     feed a report through the event path (testing)
+  update [install]             look for a new version on GitHub / install it
   quit                         stop the agent
 """
 
@@ -250,6 +251,14 @@ case "raw":
 case "inject":
     guard !args.isEmpty else { fail("usage: mmctl inject HEX") }
     request(IPCRequest(cmd: "inject", device: deviceID, hex: args.joined(separator: " "))) { _ in exit(0) }
+
+case "update":
+    let install = args.first == "install"
+    if install { print("Downloading and installing; the agent restarts when done…") }
+    request(IPCRequest(cmd: install ? "install-update" : "check-updates")) { r in
+        print(r.text ?? "")
+        exit(0)
+    }
 
 case "quit":
     request(IPCRequest(cmd: "quit")) { _ in exit(0) }
