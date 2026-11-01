@@ -110,6 +110,69 @@ final class ThumbwheelTests: XCTestCase {
     }
 }
 
+final class ZoomTests: XCTestCase {
+    private func run(_ a: inout ZoomAnimator, maxFrames: Int = 1000) -> (total: Double, frames: Int) {
+        var total = 0.0, frames = 0
+        while !a.isIdle && frames < maxFrames {
+            total += a.step(dt: 1.0 / 120)
+            frames += 1
+        }
+        return (total, frames)
+    }
+
+    func testAnimatorDeliversEverything() {
+        var a = ZoomAnimator()
+        a.add(log(2))
+        let (total, frames) = run(&a)
+        XCTAssertEqual(total, log(2), accuracy: 1e-9)
+        XCTAssertLessThan(frames, 40) // a third of a second
+    }
+
+    func testTheRestPlaysOutQuicklyOnceTheInputIsOver() {
+        var a = ZoomAnimator()
+        a.add(0.03)
+        _ = a.step(dt: 1.0 / 120)
+        a.finish()
+        let (_, frames) = run(&a)
+        XCTAssertLessThanOrEqual(frames, 5) // the pinch ends within ~40 ms
+    }
+
+    func testFlushAndReversal() {
+        var a = ZoomAnimator()
+        a.add(0.2)
+        _ = a.step(dt: 1.0 / 120)
+        a.add(-0.05) // reversing drops what was left of the zoom in
+        XCTAssertEqual(a.flush(), -0.05, accuracy: 1e-12)
+        XCTAssertTrue(a.isIdle)
+    }
+
+    /// Chromium's rule: no zoom until the product of the scales leaves (0.667, 1.5).
+    private func chromiumZooms(_ steps: [Double]) -> [Bool] {
+        var unused = 1.0, reached = false
+        return steps.map { m in
+            if !reached {
+                unused *= 1 + m
+                reached = unused < ChromiumPinch.zoomOutThreshold || unused > ChromiumPinch.zoomInThreshold
+            }
+            return reached
+        }
+    }
+
+    func testChromiumOpeningStepIsSwallowedAndZoomStartsRightAfter() {
+        for zoomingIn in [true, false] {
+            let opening = ChromiumPinch.openingStep(zoomingIn: zoomingIn)
+            let step = exp(zoomingIn ? 0.009 : -0.009) - 1 // one unit of the thumb wheel
+            let zooms = chromiumZooms([opening] + Array(repeating: step, count: 5))
+            XCTAssertFalse(zooms[0], "the opening step itself must not zoom")
+            XCTAssertTrue(zooms[3], "zooming starts within three steps")
+            // A busy browser gets the opening step merged with the next one: still no jump.
+            XCTAssertEqual(chromiumZooms([(1 + opening) * (1 + step) - 1]), [false])
+        }
+        // Without it a third of a turn has no effect.
+        XCTAssertFalse(chromiumZooms(Array(repeating: 0.009, count: 40)).contains(true))
+    }
+}
+
 final class ScrollTests: XCTestCase {
     func testAnimatorDeliversEverything() {
         var a = ScrollAnimator(tau: 0.06)

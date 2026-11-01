@@ -18,6 +18,7 @@ final class Agent {
     let conflicts = ConflictWatcher()
     let hud = HUD()
     lazy var executor = ActionExecutor(synth: synth)
+    lazy var zoomer = PinchZoomer(synth: synth)
     lazy var devices = DeviceManager(agent: self)
     lazy var server = IPCServer(agent: self)
     lazy var statusMenu = StatusMenu(agent: self)
@@ -41,6 +42,9 @@ final class Agent {
 
         executor.frontmostBundleID = { [weak self] in self?.apps.current?.bundleID }
         executor.openSettings = { Agent.openSettingsApp() }
+        zoomer.willBegin = { [weak self] in
+            for c in self?.devices.controllers ?? [] { c.stopScrolling() }
+        }
 
         permissions.retryDeniedDevices = { [weak self] in self?.devices.retryDenied() ?? false }
         permissions.onNeedsRelaunch = { [weak self] in
@@ -100,6 +104,8 @@ final class Agent {
 
         devices.start()
         statusMenu.update()
+        // The first look at the window list takes tens of milliseconds: not during the first zoom.
+        DispatchQueue.main.async { _ = PointerTarget.windowOwnerUnderPointer() }
         installSignalHandlers()
         Log.info("Mouse Master agent \(version) started (accessibility: \(permissions.accessibility))")
     }

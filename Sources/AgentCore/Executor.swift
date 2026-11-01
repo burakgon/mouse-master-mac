@@ -346,52 +346,83 @@ final class ActionExecutor {
     }
 }
 
-/// Smooth zoom: turns zoom amounts into a trackpad pinch, spread over display frames so the
-/// zoom glides. The pinch ends a moment after the last input.
+/// Smooth zoom: turns zoom amounts into a trackpad pinch (a gesture that begins, changes and
+/// ends), spread over display frames so the zoom glides around the pointer.
+///
+/// The pinch ends as soon as the input is over, and right away when anything scrolls: apps
+/// take scrolling during a pinch as part of it, and Chromium then ignores the scrolling once
+/// the pinch ends (see `InputSynth.endPinch`). One zoomer serves every device, as the system
+/// has one pinch at a time.
 @MainActor
 final class PinchZoomer {
     private let synth: InputSynth
-    private var pending = 0.0          // zoom still to apply, on a log scale
-    private var active = false
+    private var animator = ZoomAnimator()
+    private(set) var active = false
     private var timer: DispatchSourceTimer?
     private var lastTick: CFTimeInterval = 0
     private var lastInput: CFTimeInterval = 0
-    private var endRequested = false
+    private var idleEnd: CFTimeInterval = 0.25
     private var activity: NSObjectProtocol?
     private static let interval = 1.0 / 120.0
-    private static let tau = 0.045
-    /// How long without input before the pinch is over.
-    private static let idleEnd = 0.25
+
+    /// Called when a pinch begins: scrolling that is still gliding has to stop.
+    var willBegin: (() -> Void)?
 
     init(synth: InputSynth) {
         self.synth = synth
     }
 
-    /// Positive zooms in; ln(2) doubles the zoom.
-    func add(_ logScale: Double) {
+    /// Positive zooms in; ln(2) doubles the zoom. The pinch ends `idleEnd` seconds after
+    /// the last input unless `finish` ends it sooner.
+    func add(_ logScale: Double, idleEnd: CFTimeInterval = 0.25) {
         guard logScale.isFinite, logScale != 0 else { return }
-        pending += logScale
         lastInput = CACurrentMediaTime()
-        endRequested = false
-        if !active {
-            active = true
-            synth.pinch(0, phase: .began)
-        }
+        self.idleEnd = idleEnd
+        var opened = false
+        if !active { opened = begin(zoomingIn: logScale > 0) }
+        animator.add(logScale)
         if timer == nil {
             start()
-            tick()
+            // The first part goes out right away, or a frame after an opening step, so the
+            // two do not reach the app together (macOS would merge them).
+            if !opened { tick() }
         }
     }
 
-    /// The input is over (wheel stopped, button released): end once the rest has played out.
+    /// The input is over (wheel stopped, button released): play out the rest quickly, then end.
     func finish() {
         guard active else { return }
-        endRequested = true
+        animator.finish()
+    }
+
+    /// Ends the pinch now, with whatever zoom was still to come.
+    func end() {
+        guard active else { return }
+        let rest = animator.flush()
+        if rest != 0 { synth.pinch(exp(rest) - 1, phase: .changed) }
+        close()
     }
 
     func cancel() {
-        pending = 0
-        if active { synth.pinch(0, phase: .ended) }
+        _ = animator.flush()
+        if active { close() }
+        stopTimer()
+    }
+
+    /// Returns true when it opened the pinch with a step of its own (see `ChromiumPinch`).
+    private func begin(zoomingIn: Bool) -> Bool {
+        willBegin?()
+        active = true
+        synth.pinch(0, phase: .began)
+        synth.endPinch = { [weak self] in self?.end() }
+        guard PointerTarget.isChromiumBrowser() else { return false }
+        synth.pinch(ChromiumPinch.openingStep(zoomingIn: zoomingIn), phase: .changed)
+        return true
+    }
+
+    private func close() {
+        synth.endPinch = nil
+        synth.pinch(0, phase: .ended)
         active = false
         stopTimer()
     }
@@ -424,19 +455,9 @@ final class PinchZoomer {
         let now = CACurrentMediaTime()
         let dt = min(now - lastTick, 0.05)
         lastTick = now
-        if pending != 0 {
-            var step = pending * (1 - exp(-dt / Self.tau))
-            if abs(pending) < 0.0008 { step = pending }
-            pending -= step
-            synth.pinch(exp(step) - 1, phase: .changed)
-        }
-        let idle = now - lastInput
-        if pending == 0 && (endRequested || idle > Self.idleEnd) {
-            synth.pinch(0, phase: .ended)
-            active = false
-            endRequested = false
-            stopTimer()
-        }
+        let step = animator.step(dt: dt)
+        if step != 0 { synth.pinch(exp(step) - 1, phase: .changed) }
+        if animator.isIdle && (animator.ending || now - lastInput > idleEnd) { close() }
     }
 }
 

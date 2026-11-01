@@ -292,3 +292,75 @@ public struct ScrollAnimator: Sendable {
         return (x, y)
     }
 }
+
+// MARK: - Smooth zoom
+
+/// Spreads zoom over time with an exponential ease-out. Amounts are on a log scale
+/// (ln 2 doubles the zoom), so steps add up and zooming in and out cancel out.
+public struct ZoomAnimator: Sendable {
+    /// Time constant of the ease-out while the input goes on, in seconds.
+    public var tau: Double
+    /// Time constant once the input is over: the rest plays out quickly.
+    public var endingTau: Double
+    /// Less than this (0.15 %) is applied in one step instead of creeping on.
+    public static let snap = 0.0015
+    public private(set) var remaining = 0.0
+    public private(set) var ending = false
+
+    public init(tau: Double = 0.03, endingTau: Double = 0.012) {
+        self.tau = tau
+        self.endingTau = endingTau
+    }
+
+    public var isIdle: Bool { remaining == 0 }
+
+    public mutating func add(_ logScale: Double) {
+        guard logScale.isFinite, logScale != 0 else { return }
+        // Reversing direction cancels whatever was still to come.
+        if remaining * logScale < 0 { remaining = 0 }
+        remaining += logScale
+        ending = false
+    }
+
+    /// The input is over.
+    public mutating func finish() {
+        ending = true
+    }
+
+    /// Everything still to come, at once.
+    public mutating func flush() -> Double {
+        defer { remaining = 0 }
+        return remaining
+    }
+
+    /// Advances by `dt` seconds; returns the zoom to apply now.
+    public mutating func step(dt: Double) -> Double {
+        guard remaining != 0 else { return 0 }
+        var d = remaining * (1 - exp(-max(dt, 0) / (ending ? endingTau : tau)))
+        if abs(remaining - d) < Self.snap { d = remaining }
+        remaining -= d
+        return d
+    }
+}
+
+/// Chromium browsers (Chrome, Brave, Edge, Vivaldi, Opera...) leave the start of every
+/// pinch alone: they zoom only once it has grown past 1.5× or shrunk past 0.667× of where
+/// it began, against zooming by accident while scrolling on a trackpad. On a thumb wheel that
+/// is a third of a turn with no effect, so the pinch opens with one step that takes it to just
+/// short of that point. Chromium swallows the step and zooms from the first real ones on.
+/// (Pages that zoom themselves on pinches, like maps, do see it.)
+public enum ChromiumPinch {
+    /// Scale a pinch must pass before Chromium zooms (render_widget_host_view_mac.mm).
+    public static let zoomInThreshold = 1.5
+    public static let zoomOutThreshold = 0.667
+    /// How far short of the threshold the opening step stops, on a log scale (2 %, about two
+    /// steps of the thumb wheel). When the browser is busy, macOS merges the steps waiting for
+    /// it into one; a step merged with the opening one must still fall short, or the page
+    /// would jump by half its size.
+    public static let margin = 0.02
+
+    /// Magnification (change of scale) of the opening step of a pinch in that direction.
+    public static func openingStep(zoomingIn: Bool) -> Double {
+        (zoomingIn ? zoomInThreshold * exp(-margin) : zoomOutThreshold * exp(margin)) - 1
+    }
+}

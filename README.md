@@ -251,6 +251,7 @@ Fine-tune the feel without rebuilding:
 defaults write com.burakgon.MouseMaster ScrollSmoothing -float 0.065      # seconds
 defaults write com.burakgon.MouseMaster ScrollPointsPerNotch -float 42
 defaults write com.burakgon.MouseMaster ThumbwheelPointsPerTurn -float 520
+defaults write com.burakgon.MouseMaster ChromiumPinchOpening -bool false  # keep Chromium's zoom dead zone
 ```
 
 ## How it works

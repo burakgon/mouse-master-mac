@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Smooth zoom starts at once in Chromium browsers (Chrome, Brave, Edge, Vivaldi, Opera, Arc).
+  They ignore the start of every pinch, up to half the page size; the pinch now opens with one
+  step they swallow, so zooming no longer waits for a third of a turn of the thumb wheel.
+- Scrolling right after zooming no longer stalls. The pinch ends the moment the thumb wheel
+  stops or anything scrolls, instead of a quarter second later (Chromium ignored scrolling that
+  began during the pinch until the wheel rested).
+
 ## 1.0.0
 
 The first release.
