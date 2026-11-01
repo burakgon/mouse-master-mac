@@ -321,8 +321,9 @@ git commit -am "Mouse Master 1.2.0" && git tag v1.2.0 && git push origin main v1
 The [Release workflow](.github/workflows/release.yml) tests, builds a universal app, signs it with
 Developer ID, notarizes it and publishes the GitHub release; installed copies find it within a
 few hours. It needs these repository secrets: `DEVELOPER_ID_P12_BASE64` and
-`DEVELOPER_ID_P12_PASSWORD` (the certificate), and `NOTARY_API_KEY_BASE64`, `NOTARY_API_KEY_ID`
-and `NOTARY_API_ISSUER_ID` (an App Store Connect API key). `scripts/release.sh --publish` does the
+`DEVELOPER_ID_P12_PASSWORD`, the certificate, which `scripts/add-signing-secrets.sh` copies from
+your keychain (run it again after renewing the certificate), and `NOTARY_API_KEY_BASE64`,
+`NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER_ID`, an App Store Connect API key. `scripts/release.sh --publish` does the
 same from a Mac whose keychain holds the certificate and a `macos-notary` notarytool profile.
 
 ## Acknowledgements
