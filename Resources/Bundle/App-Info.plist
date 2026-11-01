@@ -32,6 +32,10 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>MMUpdateRepository</key>
+	<string>burakgon/mouse-master-mac</string>
+	<key>MMUpdateTeamIdentifier</key>
+	<string>QCB78CL77T</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Burak Goncu. GPL-3.0-or-later.</string>
 </dict>

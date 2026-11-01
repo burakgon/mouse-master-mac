@@ -203,6 +203,22 @@ final class IPCServer {
             c.inject(bytes)
             reply(r, to: client)
 
+        case "check-updates":
+            Task {
+                let error = await self.agent.updater.check(userInitiated: true)
+                let s = self.agent.updater.status
+                let text = s.available ? "Mouse Master \(s.latestVersion ?? "?") is available (this is \(self.agent.version))"
+                                       : "Mouse Master \(self.agent.version) is up to date"
+                self.reply(r, to: client, ok: error == nil, error: error, text: error == nil ? text : nil)
+            }
+
+        case "install-update":
+            Task {
+                let error = await self.agent.updater.install()
+                self.reply(r, to: client, ok: error == nil, error: error,
+                           text: error == nil ? "Installed Mouse Master \(self.agent.updater.status.latestVersion ?? ""); restarting" : nil)
+            }
+
         case "osd":
             agent.hud.show(symbol: r.name ?? "computermouse", title: r.hex ?? "Mouse Master", level: nil)
             reply(r, to: client)

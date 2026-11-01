@@ -37,11 +37,14 @@ public struct General: Codable, Equatable, Sendable {
     public var appProfiles = true
     /// Temporarily give every control its native behaviour back.
     public var paused = false
+    /// Look for newer versions (GitHub releases) a few times a day.
+    public var checkForUpdates = true
 
     public init() {}
 
     enum CodingKeys: String, CodingKey {
         case showMenuBarIcon, showBatteryInMenuBar, osd, notifications, lowBatteryPercent, appProfiles, paused
+        case checkForUpdates
     }
 
     public init(from decoder: Decoder) throws {
@@ -54,6 +57,7 @@ public struct General: Codable, Equatable, Sendable {
         lowBatteryPercent = c.value(.lowBatteryPercent, d.lowBatteryPercent)
         appProfiles = c.value(.appProfiles, d.appProfiles)
         paused = c.value(.paused, d.paused)
+        checkForUpdates = c.value(.checkForUpdates, d.checkForUpdates)
     }
 }
 

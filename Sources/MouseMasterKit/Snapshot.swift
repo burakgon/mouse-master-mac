@@ -10,9 +10,12 @@ public struct AgentState: Codable, Equatable, Sendable {
     public var conflicts: [ConflictInfo]
     /// The system setting for trackpads and mice; mice can override it per device.
     public var systemNaturalScrolling: Bool
+    /// Newer versions; nil when this copy cannot update itself (or the agent is older).
+    public var update: UpdateStatus?
 
     public init(agentVersion: String, devices: [DeviceSnapshot], config: Config, permissions: Permissions,
-                activeApp: ActiveApp?, conflicts: [ConflictInfo], systemNaturalScrolling: Bool) {
+                activeApp: ActiveApp?, conflicts: [ConflictInfo], systemNaturalScrolling: Bool,
+                update: UpdateStatus? = nil) {
         self.agentVersion = agentVersion
         self.devices = devices
         self.config = config
@@ -20,6 +23,7 @@ public struct AgentState: Codable, Equatable, Sendable {
         self.activeApp = activeApp
         self.conflicts = conflicts
         self.systemNaturalScrolling = systemNaturalScrolling
+        self.update = update
     }
 }
 
