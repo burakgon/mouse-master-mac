@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 - Updates from GitHub. Mouse Master looks for a new version a few times a day (Settings ›
   Updates turns this off) and offers to install it: from a notification, the menu bar, Settings › Updates or `mmctl update`. It installs
